@@ -2,7 +2,15 @@
 #include "heap.h"
 #include <cstdlib>
 #include <cstdio>
+#include <string>
 #include <cstring>
+void Encoder::Init()
+{
+	memset(Cnt, 0, sizeof(Cnt));
+	memset(Son, 0, sizeof(Son));
+	Text.clear();
+	Last = LastLen = N = FileSize = 0;
+}
 void Encoder::Print(int x, int y)
 {
 	if(y + LastLen < 8)
@@ -12,31 +20,50 @@ void Encoder::Print(int x, int y)
 	}
 	else 
 	{
-		Last = (Last << 8 - LastLen) + (x >> LastLen);
+		int TmpLen = y - (8 - LastLen);
+		Last = (Last << 8 - LastLen) + (x >> TmpLen);
 		fwrite(&Last, 1, 1, OutFile);
-		Last = x % (1 << 8 - LastLen);
-		LastLen = y - 8 + LastLen;
+		Last = x % (1 << TmpLen);
+		LastLen = TmpLen;
 	}
 }
 void Encoder::ForcePrint()
 {
+	if(LastLen == 0) return;
 	Last <<= 8 - LastLen;
 	fwrite(&Last, 1, 1, OutFile);
 	Last = LastLen = 0;
 }
+void Encoder::GetCode(int x)
+{
+	Print(Son[x][0] * 2 + Son[x][1], 2);
+	if(Son[x][0])
+	{
+		CodeLen[Son[x][0]] = CodeLen[x] + 1;
+		Code[Son[x][0]] = Code[Son[x][0]] << 1;
+		GetCode(Son[x][0]);
+	}
+	if(Son[x][1])
+	{
+		CodeLen[Son[x][1]] = CodeLen[x] + 1;
+		Code[Son[x][1]] = (Code[Son[x][1]] << 1) + 1;
+		GetCode(Son[x][1]);
+	}
+}
 bool Encoder::Encode(FILE *fin,FILE *fout){
 	int x;
 	OutFile = fout;
-	memset(Cnt, 0, sizeof(Cnt));
-	memset(Son, 0 ,sizeof(Son));
+	Init();
 	while(1)
 	{
 		if(fread(&x, 1, 1, fin) > 0)
 		{
-			Cnt[x]++;	
+			Cnt[x]++;
 			FileSize++;
+			Text.push_back((char)x);
 		} else break;
 	}
+	fwrite(&FileSize, 8, 1, OutFile);//?
 	Heap Hp;
 	for(int i = 0; i < 256; i++)
 	{
@@ -51,5 +78,13 @@ bool Encoder::Encode(FILE *fin,FILE *fout){
 		Hp.Push(Tmp1.Val + Tmp2.Val, N);
 		++N;
 	}
-	
+	Code[N - 1] = CodeLen[N - 1] = 0;
+	GetCode(N - 1);
+	for(int i = 0; i < FileSize; i++)
+	{
+		int Temp = (int)Text[i];
+		Print(Code[Temp], CodeLen[Temp]);
+	}
+	ForcePrint();
+	return true;
 }
