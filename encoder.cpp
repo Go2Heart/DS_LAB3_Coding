@@ -1,9 +1,9 @@
-#include "encoder.h"
-#include "heap.h"
 #include <cstdlib>
 #include <cstdio>
 #include <string>
 #include <cstring>
+#include "encoder.h"
+#include "heap.h"
 void Encoder::Init()
 {
 	memset(Cnt, 0, sizeof(Cnt));
@@ -22,7 +22,13 @@ void Encoder::Print(int x, int y)
 	{
 		int TmpLen = y - (8 - LastLen);
 		Last = (Last << 8 - LastLen) + (x >> TmpLen);
-		fwrite(&Last, 1, 1, OutFile);
+		if(OutputType == 0)fwrite(&Last, 1, 1, OutFile);
+		else 
+		{
+			int Temp = Last;
+			for(int i = 7 ; i >= 0; i--)fprintf(OutFile, "%d", (Temp >> i) % 2);
+			fprintf(OutFile, " ");
+		}
 		Last = x % (1 << TmpLen);
 		LastLen = TmpLen;
 	}
@@ -31,44 +37,80 @@ void Encoder::ForcePrint()
 {
 	if(LastLen == 0) return;
 	Last <<= 8 - LastLen;
-	fwrite(&Last, 1, 1, OutFile);
+	if(OutputType == 0)fwrite(&Last, 1, 1, OutFile);
+	else
+	{
+		int Temp = Last;
+		for(int i = 7 ; i >= 0; i--)fprintf(OutFile, "%d", (Temp >> i) % 2);
+		fprintf(OutFile, " ");
+	}
 	Last = LastLen = 0;
 }
 void Encoder::GetCode(int x)
 {
-	Print(Son[x][0] * 2 + Son[x][1], 2);
-	if(Son[x][0])
+	int HasSon = Son[x][0] != 0;
+	Print(HasSon, 1);
+	if(HasSon)
 	{
 		CodeLen[Son[x][0]] = CodeLen[x] + 1;
-		Code[Son[x][0]] = Code[Son[x][0]] << 1;
+		Code[Son[x][0]] = Code[x] << 1;
 		GetCode(Son[x][0]);
-	}
-	if(Son[x][1])
-	{
 		CodeLen[Son[x][1]] = CodeLen[x] + 1;
-		Code[Son[x][1]] = (Code[Son[x][1]] << 1) + 1;
+		Code[Son[x][1]] = (Code[x] << 1) + 1;
 		GetCode(Son[x][1]);
 	}
 }
-bool Encoder::Encode(FILE *fin,FILE *fout){
-	int x;
-	OutFile = fout;
+void Encoder::PrintVal(int x)
+{
+	int HasSon = Son[x][0] != 0;
+	if(HasSon)
+	{
+		PrintVal(Son[x][0]);
+		PrintVal(Son[x][1]);
+	} else
+	{
+		Print(x, 8);
+		//if(OutputType == 0)fwrite(&x, 1, 1, OutFile);
+		//else 	
+	}
+}
+bool Encoder::Encode(FILE *fin,FILE *fout, bool InTy, bool OuTy){
+	OutFile = fout/*stderr*/;
+	OutputType = OuTy;
 	Init();
-	while(1)
+	while(!feof(fin))
 	{
-		if(fread(&x, 1, 1, fin) > 0)
-		{
-			Cnt[x]++;
-			FileSize++;
-			Text.push_back((char)x);
-		} else break;
+		char Cx; int Ix;
+		if(InTy == 0)
+			if(fread(&Ix, 1, 1, fin) > 0)
+			{
+				Cnt[Ix]++;
+				FileSize++;
+				Text.push_back(char(Ix));
+			} else break;
+		else 
+			if(fread(&Cx, 1, 1, fin) > 0)
+			{
+				Cnt[Cx]++;
+				FileSize++;
+				Text.push_back(Cx);
+			} else break;
 	}
-	fwrite(&FileSize, 8, 1, OutFile);//?
+	if(OutputType == 0)
+		fwrite(&FileSize, 8, 1, OutFile);
+	else
+	{
+		for(int i = 7;i >= 0; i--)fprintf(OutFile, "%d", (FileSize >> i) % 2);
+		fprintf(OutFile, " ");
+	}		
 	Heap Hp;
+	int NodeCount = 0;
 	for(int i = 0; i < 256; i++)
-	{
-		if(Cnt[i] != 0) Hp.Push(Cnt[i], i);	
-	}
+		if(Cnt[i] != 0)
+		{
+			Hp.Push(Cnt[i], i);
+			NodeCount ++;
+		}
 	N = 256;
 	while(Hp.Size() > 1)
 	{
@@ -79,11 +121,36 @@ bool Encoder::Encode(FILE *fin,FILE *fout){
 		++N;
 	}
 	Code[N - 1] = CodeLen[N - 1] = 0;
+	
+	int TreeSize = (2 * NodeCount - 1) / 8 + 1;
+	if(OutputType == 0)
+		fwrite(&TreeSize, 1, 1, OutFile);
+	else 
+	{
+		for(int i = 7;i >= 0; i--)fprintf(OutFile, "%d", (TreeSize >> i) % 2);
+		fprintf(OutFile, " ");
+	}
+		
 	GetCode(N - 1);
+	ForcePrint();
+	PrintVal(N - 1);
+	fprintf(OutFile,"\n");
+	fprintf(OutFile,"begin:\n");
+	for(int i=0;i<256;i++)if(Cnt[i])
+	{
+		fprintf(OutFile,"%c:",char(i));
+		for(int j=CodeLen[i]-1;j>=0;j--)fprintf(OutFile, "%d",(Code[i]>>j)%2);
+		fprintf(OutFile,"\n");
+	}
+	fprintf(OutFile,"end:\n");
 	for(int i = 0; i < FileSize; i++)
 	{
 		int Temp = (int)Text[i];
-		Print(Code[Temp], CodeLen[Temp]);
+		if(CodeLen[Temp] > 8)
+		{
+			Print(Code[Temp] >> 8, CodeLen[Temp] - 8);
+			Print(Code[Temp] % (1 << 8), 8);	
+		} else Print(Code[Temp], CodeLen[Temp]);
 	}
 	ForcePrint();
 	return true;

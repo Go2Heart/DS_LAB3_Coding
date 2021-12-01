@@ -29,6 +29,7 @@ bool Heap::Push(int x, int y)
 bool Heap::Pop(HeapNode &x)
 {
 	if(Sz < 0) return false;
+	x = Obj[0];
 	--Sz;
 	Obj[0] = Obj[Sz];
 	int Cur = 0;
@@ -36,13 +37,14 @@ bool Heap::Pop(HeapNode &x)
 	{
 		int Left = 2 * Cur + 1, Right = 2 * Cur + 2;
 		if(Left >= Sz) break;
-		int Max = Left;
-		if(Right < Sz && Obj[Right] < Obj[Left]) Max = Right;
-		if(Obj[Max] < Obj[Cur])
+		int Min = Left;
+		if(Right < Sz && Obj[Right] < Obj[Left]) Min = Right;
+		if(Obj[Min] < Obj[Cur])
 		{
-			HeapNode Temp = Obj[Max];
-			Obj[Max] = Obj[Cur];
+			HeapNode Temp = Obj[Min];
+			Obj[Min] = Obj[Cur];
 			Obj[Cur] = Temp;
+			Cur = Min;
 		} else break;
 	}
 }
