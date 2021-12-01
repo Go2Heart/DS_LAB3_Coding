@@ -8,7 +8,6 @@ void Encoder::Init()
 {
 	memset(Cnt, 0, sizeof(Cnt));
 	memset(Son, 0, sizeof(Son));
-	Text.clear();
 	Last = LastLen = N = FileSize = 0;
 }
 void Encoder::Print(int x, int y)
@@ -27,7 +26,7 @@ void Encoder::Print(int x, int y)
 		{
 			int Temp = Last;
 			for(int i = 7 ; i >= 0; i--)fprintf(OutFile, "%d", (Temp >> i) % 2);
-			fprintf(OutFile, " ");
+//			fprintf(OutFile, " ");
 		}
 		Last = x % (1 << TmpLen);
 		LastLen = TmpLen;
@@ -42,7 +41,7 @@ void Encoder::ForcePrint()
 	{
 		int Temp = Last;
 		for(int i = 7 ; i >= 0; i--)fprintf(OutFile, "%d", (Temp >> i) % 2);
-		fprintf(OutFile, " ");
+//		fprintf(OutFile, " ");
 	}
 	Last = LastLen = 0;
 }
@@ -80,28 +79,30 @@ bool Encoder::Encode(FILE *fin,FILE *fout, bool InTy, bool OuTy){
 	Init();
 	while(!feof(fin))
 	{
-		char Cx; int Ix;
+		unsigned char Cx;int Ix;
 		if(InTy == 0)
-			if(fread(&Ix, 1, 1, fin) > 0)
+			if(fread(&Cx, 1, 1, fin) > 0)
 			{
-				Cnt[Ix]++;
+				Cnt[Cx]++;
 				FileSize++;
-				Text.push_back(char(Ix));
 			} else break;
 		else 
 			if(fread(&Cx, 1, 1, fin) > 0)
 			{
 				Cnt[Cx]++;
 				FileSize++;
-				Text.push_back(Cx);
 			} else break;
 	}
 	if(OutputType == 0)
 		fwrite(&FileSize, 8, 1, OutFile);
 	else
 	{
-		for(int i = 7;i >= 0; i--)fprintf(OutFile, "%d", (FileSize >> i) % 2);
-		fprintf(OutFile, " ");
+		long long Temp = FileSize;
+		for(int i = 0; i < 8; i++)
+		{
+			for(int j = 7;j >= 0; j--)fprintf(OutFile, "%d", (Temp >> j) % 2);
+			Temp >>= 8;
+		}
 	}		
 	Heap Hp;
 	int NodeCount = 0;
@@ -128,13 +129,12 @@ bool Encoder::Encode(FILE *fin,FILE *fout, bool InTy, bool OuTy){
 	else 
 	{
 		for(int i = 7;i >= 0; i--)fprintf(OutFile, "%d", (TreeSize >> i) % 2);
-		fprintf(OutFile, " ");
 	}
 		
 	GetCode(N - 1);
 	ForcePrint();
 	PrintVal(N - 1);
-	fprintf(OutFile,"\n");
+/*	fprintf(OutFile,"\n");
 	fprintf(OutFile,"begin:\n");
 	for(int i=0;i<256;i++)if(Cnt[i])
 	{
@@ -143,15 +143,30 @@ bool Encoder::Encode(FILE *fin,FILE *fout, bool InTy, bool OuTy){
 		fprintf(OutFile,"\n");
 	}
 	fprintf(OutFile,"end:\n");
+*/	
+	fseek(fin, 0, SEEK_SET);
 	for(int i = 0; i < FileSize; i++)
 	{
-		int Temp = (int)Text[i];
+		unsigned char Cx;
+		int Temp;
+		if(InTy == 0)
+		{
+			fread(&Cx, 1, 1, fin);
+			Temp = Cx;
+		}
+		else
+		{
+			fread(&Cx, 1, 1, fin);
+			Temp = Cx;
+		}
 		if(CodeLen[Temp] > 8)
 		{
 			Print(Code[Temp] >> 8, CodeLen[Temp] - 8);
-			Print(Code[Temp] % (1 << 8), 8);	
+			Print(Code[Temp] % (1 << 8), 8);
 		} else Print(Code[Temp], CodeLen[Temp]);
 	}
 	ForcePrint();
+	fclose(fin);
+	fclose(fout);
 	return true;
 }
