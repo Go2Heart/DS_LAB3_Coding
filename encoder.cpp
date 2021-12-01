@@ -1,8 +1,16 @@
-#include "encoder.h"
-#include "heap.h"
 #include <cstdlib>
 #include <cstdio>
+#include <string>
 #include <cstring>
+#include "encoder.h"
+#include "heap.h"
+void Encoder::Init()
+{
+	memset(Cnt, 0, sizeof(Cnt));
+	memset(Son, 0, sizeof(Son));
+	Text.clear();
+	Last = LastLen = N = FileSize = 0;
+}
 void Encoder::Print(int x, int y)
 {
 	if(y + LastLen < 8)
@@ -12,36 +20,97 @@ void Encoder::Print(int x, int y)
 	}
 	else 
 	{
-		Last = (Last << 8 - LastLen) + (x >> LastLen);
-		fwrite(&Last, 1, 1, OutFile);
-		Last = x % (1 << 8 - LastLen);
-		LastLen = y - 8 + LastLen;
+		int TmpLen = y - (8 - LastLen);
+		Last = (Last << 8 - LastLen) + (x >> TmpLen);
+		if(OutputType == 0)fwrite(&Last, 1, 1, OutFile);
+		else 
+		{
+			int Temp = Last;
+			for(int i = 7 ; i >= 0; i--)fprintf(OutFile, "%d", (Temp >> i) % 2);
+			fprintf(OutFile, " ");
+		}
+		Last = x % (1 << TmpLen);
+		LastLen = TmpLen;
 	}
 }
 void Encoder::ForcePrint()
 {
+	if(LastLen == 0) return;
 	Last <<= 8 - LastLen;
-	fwrite(&Last, 1, 1, OutFile);
+	if(OutputType == 0)fwrite(&Last, 1, 1, OutFile);
+	else
+	{
+		int Temp = Last;
+		for(int i = 7 ; i >= 0; i--)fprintf(OutFile, "%d", (Temp >> i) % 2);
+		fprintf(OutFile, " ");
+	}
 	Last = LastLen = 0;
 }
-bool Encoder::Encode(FILE *fin,FILE *fout){
-	int x;
-	OutFile = fout;
-	memset(Cnt, 0, sizeof(Cnt));
-	memset(Son, 0 ,sizeof(Son));
-	while(1)
+void Encoder::GetCode(int x)
+{
+	int HasSon = Son[x][0] != 0;
+	Print(HasSon, 1);
+	if(HasSon)
 	{
-		if(fread(&x, 1, 1, fin) > 0)
-		{
-			Cnt[x]++;	
-			FileSize++;
-		} else break;
+		CodeLen[Son[x][0]] = CodeLen[x] + 1;
+		Code[Son[x][0]] = Code[x] << 1;
+		GetCode(Son[x][0]);
+		CodeLen[Son[x][1]] = CodeLen[x] + 1;
+		Code[Son[x][1]] = (Code[x] << 1) + 1;
+		GetCode(Son[x][1]);
 	}
+}
+void Encoder::PrintVal(int x)
+{
+	int HasSon = Son[x][0] != 0;
+	if(HasSon)
+	{
+		PrintVal(Son[x][0]);
+		PrintVal(Son[x][1]);
+	} else
+	{
+		Print(x, 8);
+		//if(OutputType == 0)fwrite(&x, 1, 1, OutFile);
+		//else 	
+	}
+}
+bool Encoder::Encode(FILE *fin,FILE *fout, bool InTy, bool OuTy){
+	OutFile = fout/*stderr*/;
+	OutputType = OuTy;
+	Init();
+	while(!feof(fin))
+	{
+		char Cx; int Ix;
+		if(InTy == 0)
+			if(fread(&Ix, 1, 1, fin) > 0)
+			{
+				Cnt[Ix]++;
+				FileSize++;
+				Text.push_back(char(Ix));
+			} else break;
+		else 
+			if(fread(&Cx, 1, 1, fin) > 0)
+			{
+				Cnt[Cx]++;
+				FileSize++;
+				Text.push_back(Cx);
+			} else break;
+	}
+	if(OutputType == 0)
+		fwrite(&FileSize, 8, 1, OutFile);
+	else
+	{
+		for(int i = 7;i >= 0; i--)fprintf(OutFile, "%d", (FileSize >> i) % 2);
+		fprintf(OutFile, " ");
+	}		
 	Heap Hp;
+	int NodeCount = 0;
 	for(int i = 0; i < 256; i++)
-	{
-		if(Cnt[i] != 0) Hp.Push(Cnt[i], i);	
-	}
+		if(Cnt[i] != 0)
+		{
+			Hp.Push(Cnt[i], i);
+			NodeCount ++;
+		}
 	N = 256;
 	while(Hp.Size() > 1)
 	{
@@ -51,5 +120,38 @@ bool Encoder::Encode(FILE *fin,FILE *fout){
 		Hp.Push(Tmp1.Val + Tmp2.Val, N);
 		++N;
 	}
+	Code[N - 1] = CodeLen[N - 1] = 0;
 	
+	int TreeSize = (2 * NodeCount - 1) / 8 + 1;
+	if(OutputType == 0)
+		fwrite(&TreeSize, 1, 1, OutFile);
+	else 
+	{
+		for(int i = 7;i >= 0; i--)fprintf(OutFile, "%d", (TreeSize >> i) % 2);
+		fprintf(OutFile, " ");
+	}
+		
+	GetCode(N - 1);
+	ForcePrint();
+	PrintVal(N - 1);
+	fprintf(OutFile,"\n");
+	fprintf(OutFile,"begin:\n");
+	for(int i=0;i<256;i++)if(Cnt[i])
+	{
+		fprintf(OutFile,"%c:",char(i));
+		for(int j=CodeLen[i]-1;j>=0;j--)fprintf(OutFile, "%d",(Code[i]>>j)%2);
+		fprintf(OutFile,"\n");
+	}
+	fprintf(OutFile,"end:\n");
+	for(int i = 0; i < FileSize; i++)
+	{
+		int Temp = (int)Text[i];
+		if(CodeLen[Temp] > 8)
+		{
+			Print(Code[Temp] >> 8, CodeLen[Temp] - 8);
+			Print(Code[Temp] % (1 << 8), 8);	
+		} else Print(Code[Temp], CodeLen[Temp]);
+	}
+	ForcePrint();
+	return true;
 }
