@@ -1,10 +1,10 @@
 struct Encoder
 {
-	int FileSize, N, Cnt[256], Son[512][2], Last, LastLen;
+	int N, Cnt[256], Son[512][2], Last, LastLen;
+	long long FileSize;
 	bool OutputType;
     FILE *OutFile;
     int Code[512], CodeLen[512];
-    std::string Text;
     void Init();
     void Print(int x, int y);
     void ForcePrint();
