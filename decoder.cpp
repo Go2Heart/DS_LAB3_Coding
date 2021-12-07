@@ -9,8 +9,9 @@ void Decoder::Init()
 	memset(Son, 0, sizeof(Son));
 	LastLen = Last = N = 0;
 }
-int Decoder::Read()
+bool Decoder::Read(int &x)
 {
+	// if(feof(InFile)) return false;
 	if(LastLen == 0)
 	{
 		if(InputType == 1)
@@ -18,37 +19,52 @@ int Decoder::Read()
 			unsigned char Temp; Last = 0;
 			for(int i = 0; i < 8; i++)
 			{
+				if(feof(InFile)) return false;
 				fscanf(InFile, "%c", &Temp);
-				Last = (Last << 1) + Temp - '0';	
+				Last = (Last << 1) + Temp - '0';
 			}
+			// if(feof(InFile)) return false;
+			fscanf(InFile, "%c", &Temp);
 		}
-		else fread(&Last, 1, 1, InFile);
+		else
+		{
+			if(feof(InFile)) return false;
+			fread(&Last, 1, 1, InFile);
+		}
 		LastLen = 7;
 	}else LastLen--;
-	return (Last >> LastLen) % 2;
+	x =  (Last >> LastLen) % 2;
+	return true;
 }
 void Decoder::ForceRead()
 {
 	Last = LastLen = 0;
 }
-void Decoder::BuildTree(int &x)
+bool Decoder::BuildTree(int &x)
 {
 	x = N; ++N;
-	int HasSon = Read();
+	int HasSon;
+	if(!Read(HasSon))
+		return false;
 	if(HasSon)
 	{
-		BuildTree(Son[x][0]);
-		BuildTree(Son[x][1]);
+		if(!BuildTree(Son[x][0]))
+			return false;
+		if(!BuildTree(Son[x][1]))
+			return false;
 	}
+	return true;
 }
-void Decoder::InsertVal(int x)
+bool Decoder::InsertVal(int x)
 {
 	int HasSon = Son[x][0] != 0;
 	if(HasSon)
 	{
-		InsertVal(Son[x][0]);
-		InsertVal(Son[x][1]);
-	} else 
+		if(!InsertVal(Son[x][0]))
+			return false;
+		if(!InsertVal(Son[x][1]))
+			return false;
+	} else
 	{
 		unsigned char Temp;
 		if(InputType == 1)
@@ -56,15 +72,23 @@ void Decoder::InsertVal(int x)
 			unsigned char Tmp;
 			for(int i = 0; i < 8; i++)
 			{
+				if(feof(InFile)) return false;
 				fscanf(InFile, "%c", &Tmp);
-				Temp = (Temp << 1) + Tmp - '0';	
+				Temp = (Temp << 1) + Tmp - '0';
 			}
+			if(feof(InFile)) return false;
+			fscanf(InFile, "%c", &Tmp);
 		}
-		else fread(&Temp, 1, 1, InFile);
+		else
+		{
+			if(feof(InFile)) return false;
+			fread(&Temp, 1, 1, InFile);
+		}
 		Code[x] = Temp;
 	}
+	return true;
 }
-void Decoder::Decoding(int x)
+bool Decoder::Decoding(int x)
 {
 	if(Son[x][0] == 0)
 	{
@@ -72,11 +96,15 @@ void Decoder::Decoding(int x)
 			fwrite(&Code[x], 1, 1, OutFile);
 		else
 			fprintf(OutFile, "%c", Code[x]);
-		return;
+		return true;
 	}
-	int Temp = Read();
-	if(Temp == 0)Decoding(Son[x][0]);
-	else Decoding(Son[x][1]);
+	int Temp;
+	if(!Read(Temp))
+		return false;
+	bool Flag = true;
+	if(Temp == 0) Flag &= Decoding(Son[x][0]);
+	else Flag &= Decoding(Son[x][1]);
+	return Flag;
 }
 bool Decoder::Decode(FILE *fin,FILE *fout, bool InTy, bool OuTy){
 	InFile = fin; OutFile = fout;
@@ -92,25 +120,39 @@ bool Decoder::Decode(FILE *fin,FILE *fout, bool InTy, bool OuTy){
 			int Nownum = 0;
 			for(int j = 0; j < 8; j++)
 			{
+				if(feof(InFile)) return false;
 				fscanf(fin, "%c", &Temp);
 				Nownum = (Nownum << 1) + Temp - '0';
 			}
+			if(feof(InFile)) return false;
+			fscanf(fin, "%c", &Temp);
 			FileSize += bit * Nownum;
 			bit = bit * 256;
 		}
-		for(int i = 0; i < 8; i++)fscanf(fin, "%c", &Temp);
+		for(int i = 0; i < 8; i++)
+		{
+			if(feof(InFile)) return false;
+			fscanf(fin, "%c", &Temp);
+		}
+		if(feof(InFile)) return false;
+		fscanf(fin, "%c", &Temp);
 	} else 
 	{
+		if(feof(InFile)) return false;
 		fread(&FileSize, 8, 1, fin);
 		unsigned char Temp;
+		if(feof(InFile)) return false;
 		fread(&Temp, 1, 1,fin);
 	}
-	BuildTree(Root);
+	if(!BuildTree(Root))
+		return false;
 	ForceRead();
-	InsertVal(Root);
+	if(!InsertVal(Root))
+		return false;
 	for(int i = 0; i < FileSize; i++)
 	{
-		Decoding(Root);
+		if(!Decoding(Root))
+			return false;
 	}
 	fclose(fin);
 	fclose(fout);

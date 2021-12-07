@@ -47,6 +47,7 @@ bool Heap::Pop(HeapNode &x)
 			Cur = Min;
 		} else break;
 	}
+	return true;
 }
 int Heap::Size()
 {
