@@ -7,10 +7,10 @@ struct Decoder
     FILE *InFile, *OutFile;
     unsigned char Code[512];
     void Init();
-	int Read();
+	bool Read(int &x);
     void ForceRead();
-    void BuildTree(int &x);
-    void InsertVal(int x);
-    void Decoding(int x);
+    bool BuildTree(int &x);
+    bool InsertVal(int x);
+    bool Decoding(int x);
     bool Decode(FILE *fin, FILE *fout, bool InTy, bool OuTy);
 };

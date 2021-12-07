@@ -26,7 +26,7 @@ void Encoder::Print(int x, int y)
 		{
 			int Temp = Last;
 			for(int i = 7 ; i >= 0; i--)fprintf(OutFile, "%d", (Temp >> i) % 2);
-//			fprintf(OutFile, " ");
+			fprintf(OutFile, " ");
 		}
 		Last = x % (1 << TmpLen);
 		LastLen = TmpLen;
@@ -41,7 +41,7 @@ void Encoder::ForcePrint()
 	{
 		int Temp = Last;
 		for(int i = 7 ; i >= 0; i--)fprintf(OutFile, "%d", (Temp >> i) % 2);
-//		fprintf(OutFile, " ");
+		fprintf(OutFile, " ");
 	}
 	Last = LastLen = 0;
 }
@@ -102,6 +102,7 @@ bool Encoder::Encode(FILE *fin,FILE *fout, bool InTy, bool OuTy){
 		{
 			for(int j = 7;j >= 0; j--)fprintf(OutFile, "%d", (Temp >> j) % 2);
 			Temp >>= 8;
+			fprintf(OutFile, " "); 
 		}
 	}		
 	Heap Hp;
@@ -129,6 +130,7 @@ bool Encoder::Encode(FILE *fin,FILE *fout, bool InTy, bool OuTy){
 	else 
 	{
 		for(int i = 7;i >= 0; i--)fprintf(OutFile, "%d", (TreeSize >> i) % 2);
+		fprintf(OutFile, " ");
 	}
 		
 	GetCode(N - 1);
